@@ -1,0 +1,103 @@
+{
+  "from": "2026-09-01",
+  "to": "2026-10-31",
+  "today": "2026-10-05",
+  "sections": {
+    "homework": [
+      {
+        "day": "2026-10-06",
+        "section": "homework",
+        "subject": "ITALIANO",
+        "text": "Leggere il capitolo 3 - (Prof.ssa BIANCHI ANNA) (assigned 2026-10-05)"
+      },
+      {
+        "day": "2026-10-07",
+        "section": "homework",
+        "subject": "MATEMATICA",
+        "text": "Esercizi 4-10 pag. 120 - (Prof. VERDI LUCA) (assigned 2026-10-05)"
+      },
+      {
+        "day": "2026-10-20",
+        "section": "homework",
+        "subject": "ITALIANO",
+        "text": "Tema sulle vacanze - (Prof.ssa BIANCHI ANNA) (assigned 2026-10-05)"
+      }
+    ],
+    "grades": [
+      {
+        "day": "2026-09-15",
+        "section": "grades",
+        "subject": "MATEMATICA",
+        "text": "9 (Test ingresso) - (Prof. VERDI LUCA)"
+      },
+      {
+        "day": "2026-10-02",
+        "section": "grades",
+        "subject": "MATEMATICA",
+        "text": "8 (Verifica frazioni) - (Prof. VERDI LUCA)"
+      },
+      {
+        "day": "2026-10-05",
+        "section": "grades",
+        "subject": "STORIA",
+        "text": "6½ - (Prof. NERI PAOLO) [Studiare le date]"
+      }
+    ],
+    "reminders": [
+      {
+        "day": "2026-10-06",
+        "section": "reminders",
+        "subject": "(Prof. NERI PAOLO)",
+        "text": "Interrogazione di storia [09:00-10:00]"
+      },
+      {
+        "day": "2026-10-09",
+        "section": "reminders",
+        "subject": "(Prof.ssa GIALLI SARA)",
+        "text": "Verifica di inglese unità 2"
+      }
+    ],
+    "notices": [
+      {
+        "day": "2026-09-14",
+        "section": "notices",
+        "subject": "news",
+        "text": "Informativa progetto lettura - Segreteria"
+      },
+      {
+        "day": "2026-09-20",
+        "section": "notices",
+        "subject": "General",
+        "text": "Orario definitivo F.to - Segreteria"
+      },
+      {
+        "day": "2026-10-01",
+        "section": "notices",
+        "subject": "Circolari",
+        "text": "Uscita didattica al museo - Dirigente (deadline 2026-10-10) [acknowledgement required] [consent required]"
+      }
+    ],
+    "absences": [
+      {
+        "day": "2026-09-22",
+        "section": "absences",
+        "subject": "late entry",
+        "text": "Ingresso alle 09:00; justified; Visita medica"
+      },
+      {
+        "day": "2026-09-29",
+        "section": "absences",
+        "subject": "absence",
+        "text": "Assenza; to justify"
+      }
+    ],
+    "notes": [
+      {
+        "day": "2026-09-30",
+        "section": "notes",
+        "subject": "(Prof.ssa GIALLI SARA)",
+        "text": "Disturba durante la lezione"
+      }
+    ]
+  }
+}

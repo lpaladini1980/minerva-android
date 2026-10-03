@@ -1,0 +1,11 @@
+{
+  "success": true,
+  "data": {
+    "resetPassword": false,
+    "anno": {"dataInizio": "2026-09-01", "anno": "2026/2027", "dataFine": "2027-08-31"},
+    "genitore": {"desEMail": "parent@example.org", "nominativo": "ROSSI MARIO", "pk": "g1"},
+    "profiloDisabilitato": false,
+    "isSpid": false,
+    "alunno": {"isUltimaClasse": false, "nominativo": "ROSSI BIANCA MARIA", "cognome": "ROSSI", "nome": "BIANCA MARIA", "pk": "a2", "maggiorenne": false, "desEmail": null}
+  }
+}
