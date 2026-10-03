@@ -18,6 +18,8 @@ powershell -ExecutionPolicy Bypass -File build-apk.ps1 -Project app -Name Minerv
 bash test.sh                                                                                # core tests on a JVM
 ```
 
+**Release builds** (`-Release`) are signed with the release key. The keystore lives outside every repository and is backed up separately; its path and password come from the environment (`MINERVA_KEYSTORE`, `MINERVA_KEYSTORE_PASSWORD`). Losing the keystore means installed apps can no longer be updated. Release certificate SHA-256: `1D:68:CB:99:75:9B:67:E7:84:B1:15:69:E4:40:B0:56:D2:F7:AB:57:79:6B:A7:86:49:44:58:22:F3:8A:6E:D0`.
+
 | Path | Content |
 |---|---|
 | `app/src/.../core/` | Plain Java: `Json`, `Http` (no redirects followed), `Argo` (OAuth2 PKCE, app login keeping every child's profile, dashboard), `Report`, `Cards` (Italian cards) |

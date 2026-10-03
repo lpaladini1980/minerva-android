@@ -1,11 +1,14 @@
-# Compila una delle app in phone/ senza Gradle: javac -> d8 -> aapt2 -> zipalign -> apksigner.
-# Uso: powershell -ExecutionPolicy Bypass -File phone\build-apk.ps1 -Project phone\cpu-limiter -Name LimitiCPU [-Install]
-# Il progetto contiene AndroidManifest.xml, src\ (Java) e, se serve, res\ (risorse, es. l'icona).
-# Richiede Android Studio (Java inclusa) e l'SDK in %LOCALAPPDATA%\Android\Sdk.
+# Builds the app without Gradle: javac -> d8 -> aapt2 -> zipalign -> apksigner.
+# Usage: powershell -ExecutionPolicy Bypass -File build-apk.ps1 -Project app -Name Minerva [-Install] [-Release]
+# The project holds AndroidManifest.xml, src\ (Java) and res\ (resources).
+# Needs Android Studio (Java included) and the SDK in %LOCALAPPDATA%\Android\Sdk.
+# -Release signs with the release key: keystore path in MINERVA_KEYSTORE, password in MINERVA_KEYSTORE_PASSWORD
+# (both from the environment, never committed). Without it the APK is signed with Android's debug key.
 param(
     [Parameter(Mandatory)][string]$Project,
     [Parameter(Mandatory)][string]$Name,
-    [switch]$Install
+    [switch]$Install,
+    [switch]$Release
 )
 $ErrorActionPreference = 'Stop'
 
@@ -54,8 +57,13 @@ if (-not (Test-Path $keystore)) {
     & "$jbr\bin\keytool.exe" -genkeypair -keystore $keystore -storepass android -keypass android `
         -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -dname 'CN=Android Debug,O=Android,C=US'
 }
-# debug.keystore standard di Android: password pubblica "android", solo per build di sviluppo
-& "$bt\apksigner.bat" sign --ks $keystore --ks-pass pass:android --out $apk "$out\aligned.apk"
+if ($Release) {
+    if (-not $env:MINERVA_KEYSTORE -or -not $env:MINERVA_KEYSTORE_PASSWORD) { throw 'Release build: set MINERVA_KEYSTORE and MINERVA_KEYSTORE_PASSWORD' }
+    & "$bt\apksigner.bat" sign --ks $env:MINERVA_KEYSTORE --ks-key-alias minerva --ks-pass env:MINERVA_KEYSTORE_PASSWORD --out $apk "$out\aligned.apk"
+} else {
+    # Android's standard debug.keystore: public password "android", development builds only
+    & "$bt\apksigner.bat" sign --ks $keystore --ks-pass pass:android --out $apk "$out\aligned.apk"
+}
 if ($LASTEXITCODE) { throw 'apksigner fallito' }
 Write-Host "APK: $apk"
 
