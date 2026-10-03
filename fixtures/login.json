@@ -1,0 +1,13 @@
+{
+  "success": true,
+  "msg": null,
+  "total": 3,
+  "data": [
+    {"codMin": "SC00001", "token": "token-alice", "username": "parent.example", "isPrimoAccesso": false, "profiloDisabilitato": false, "isResetPassword": false, "isSpid": false,
+     "opzioni": [{"chiave": "votiGiornalieri", "valore": true}, {"chiave": "bacheca", "valore": true}]},
+    {"codMin": "SC00001", "token": "token-bianca", "username": "parent.example", "isPrimoAccesso": false, "profiloDisabilitato": false, "isResetPassword": false, "isSpid": false,
+     "opzioni": [{"chiave": "votiGiornalieri", "valore": true}]},
+    {"codMin": "SC00001", "token": "token-old", "username": "parent.example", "isPrimoAccesso": false, "profiloDisabilitato": true, "isResetPassword": false, "isSpid": false,
+     "opzioni": []}
+  ]
+}

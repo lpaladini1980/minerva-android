@@ -1,0 +1,48 @@
+{
+  "success": true,
+  "msg": null,
+  "data": {
+    "dati": [
+      {
+        "mediaGenerale": 7.25,
+        "registro": [
+          {"datGiorno": "2026-10-05", "materia": "MATEMATICA", "docente": "(Prof. VERDI LUCA)", "ora": 2, "isFirmato": true, "attivita": "Equazioni",
+           "compiti": [{"compito": "Esercizi 4-10 pag. 120", "dataConsegna": "2026-10-07"}]},
+          {"datGiorno": "2026-10-05", "materia": "ITALIANO", "docente": "(Prof.ssa BIANCHI ANNA)", "ora": 3, "isFirmato": true, "attivita": null,
+           "compiti": [{"compito": "Leggere il capitolo 3", "dataConsegna": "2026-10-06"}, {"compito": "Tema sulle vacanze", "dataConsegna": "2026-10-20"}]},
+          {"datGiorno": "2026-10-02", "materia": "STORIA", "docente": "(Prof. NERI PAOLO)", "ora": 1, "isFirmato": true, "compiti": null}
+        ],
+        "voti": [
+          {"datGiorno": "2026-10-02", "valore": 8.0, "codCodice": "8", "codVotoPratico": "S", "docente": "(Prof. VERDI LUCA)", "desMateria": "MATEMATICA",
+           "descrizioneProva": "Verifica frazioni", "descrizioneVoto": "otto", "desCommento": ""},
+          {"datGiorno": "2026-10-05", "valore": 6.5, "codCodice": "6½", "codVotoPratico": "N", "docente": "(Prof. NERI PAOLO)", "desMateria": "STORIA",
+           "descrizioneProva": "", "descrizioneVoto": "sei e mezzo", "desCommento": "Studiare le date"},
+          {"datGiorno": "2026-09-15", "valore": 9.0, "codCodice": "9", "codVotoPratico": "S", "docente": "(Prof. VERDI LUCA)", "desMateria": "MATEMATICA",
+           "descrizioneProva": "Test ingresso", "descrizioneVoto": "nove", "desCommento": ""}
+        ],
+        "promemoria": [
+          {"datGiorno": "2026-10-09", "desAnnotazioni": "Verifica di inglese unità 2", "docente": "(Prof.ssa GIALLI SARA)", "oraInizio": "00:00", "oraFine": "00:00", "flgVisibileFamiglia": "S"},
+          {"datGiorno": "2026-10-06", "desAnnotazioni": "Interrogazione di storia", "docente": "(Prof. NERI PAOLO)", "oraInizio": "09:00", "oraFine": "10:00", "flgVisibileFamiglia": "S"},
+          {"datGiorno": "2026-10-07", "desAnnotazioni": "Nota interna del docente", "docente": "(Prof. NERI PAOLO)", "oraInizio": "", "oraFine": "", "flgVisibileFamiglia": "N"}
+        ],
+        "bacheca": [
+          {"data": "2026-10-01", "messaggio": "Uscita didattica al museo", "autore": "Dirigente", "categoria": "Circolari", "pvRichiesta": true, "isPresaVisione": false,
+           "adRichiesta": true, "isPresaAdesioneConfermata": false, "dataScadenza": "2026-10-10", "listaAllegati": []},
+          {"data": "2026-09-20", "messaggio": "Orario\ndefinitivo  \n\nF.to", "autore": "Segreteria", "categoria": "", "pvRichiesta": true, "isPresaVisione": true,
+           "adRichiesta": false, "isPresaAdesioneConfermata": false, "dataScadenza": null, "listaAllegati": []},
+          {"data": "2026-09-14", "messaggio": "Informativa progetto lettura", "autore": "Segreteria", "categoria": "news", "pvRichiesta": true, "isPresaVisione": true,
+           "adRichiesta": false, "isPresaAdesioneConfermata": false, "dataScadenza": "2027-08-31", "listaAllegati": []}
+        ],
+        "appello": [
+          {"data": "2026-09-29", "codEvento": "A", "descrizione": "Assenza", "giustificata": "N", "daGiustificare": true, "nota": null, "docente": "(Prof. VERDI LUCA)"},
+          {"data": "2026-09-22", "codEvento": "I", "descrizione": "Ingresso alle 09:00", "giustificata": "S", "daGiustificare": false, "nota": "Visita medica", "docente": ""}
+        ],
+        "noteDisciplinari": [
+          {"data": "2026-09-30", "docente": "(Prof.ssa GIALLI SARA)", "descrizione": "Disturba durante la lezione"}
+        ],
+        "bachecaAlunno": null,
+        "fuoriClasse": []
+      }
+    ]
+  }
+}

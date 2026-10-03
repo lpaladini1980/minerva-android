@@ -1,0 +1,14 @@
+name: CI
+# Core tests on a plain JVM against the shared fixtures. Runs on pull requests only (private repo: Actions minutes).
+on:
+  pull_request:
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Core tests
+        run: bash test.sh
