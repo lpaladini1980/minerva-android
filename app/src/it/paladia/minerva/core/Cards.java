@@ -147,7 +147,7 @@ public final class Cards {
 
         Card week = new Card("Compiti dei prossimi giorni", "");
         for (Report.Item i : Report.build(dashboard, "homework", ranges.get("homework"), today)) {
-            if (!i.day.equals(next.toString())) week.rows.add(homeworkRow(i, true));
+            if (i.day.compareTo(next.toString()) > 0) week.rows.add(homeworkRow(i, true));
         }
         cards.add(week);
 
