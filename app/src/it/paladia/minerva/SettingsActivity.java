@@ -1,6 +1,8 @@
 package it.paladia.minerva;
 
 import android.app.Activity;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.text.InputType;
 import android.text.method.PasswordTransformationMethod;
@@ -10,6 +12,15 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+
+import it.paladia.minerva.core.Classroom;
+import it.paladia.minerva.core.Http;
+
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.SocketTimeoutException;
+import java.util.List;
 
 /** Settings, filled once: the Argo credentials, as in the DidUp app. */
 public class SettingsActivity extends Activity {
@@ -71,8 +82,62 @@ public class SettingsActivity extends Activity {
             finish();
         });
         form.addView(save);
+        addClassroomTrial(form);
         setContentView(scroll);
         MainActivity.darkStatusIcons(this);
+    }
+
+    /** Spike for #4: signs in with a child's school account and lists their courses, to see whether the school allows Minerva. Nothing is saved. */
+    private void addClassroomTrial(LinearLayout form) {
+        TextView note = new TextView(this);
+        note.setText("Google Classroom (prova): accedi con l'account della scuola di tuo figlio per vedere se la scuola "
+                + "permette a Minerva di leggere i corsi. Non viene salvato nulla.");
+        note.setTextSize(13);
+        note.setPadding(0, dp(24), 0, 0);
+        form.addView(note);
+        Button button = new Button(this);
+        button.setText("Prova l'accesso a Classroom");
+        form.addView(button);
+        TextView result = new TextView(this);
+        result.setTextSize(15);
+        form.addView(result);
+        button.setOnClickListener(v -> {
+            if (!Classroom.configured()) {
+                result.setText("Il collegamento a Google non è ancora configurato in questa versione di Minerva.");
+                return;
+            }
+            button.setEnabled(false);
+            result.setText("Accedi nel browser con l'account della scuola, poi torna qui.");
+            new Thread(() -> {
+                String text = classroomTrial();
+                runOnUiThread(() -> {
+                    result.setText(text);
+                    button.setEnabled(true);
+                });
+            }).start();
+        });
+    }
+
+    private String classroomTrial() {
+        try (ServerSocket server = new ServerSocket(0, 5, InetAddress.getLoopbackAddress())) {
+            server.setSoTimeout(5 * 60 * 1000);
+            String redirect = "http://127.0.0.1:" + server.getLocalPort();
+            String verifier = Classroom.newVerifier();
+            String state = Classroom.newState();
+            Uri url = Uri.parse(Classroom.authorizationUrl(redirect, verifier, state));
+            runOnUiThread(() -> startActivity(new Intent(Intent.ACTION_VIEW, url)));
+            String code = Classroom.awaitCode(server, state);
+            Classroom classroom = new Classroom(Http.DEFAULT);
+            classroom.exchangeCode(code, verifier, redirect);
+            List<Classroom.Course> courses = classroom.courses();
+            StringBuilder b = new StringBuilder("Accesso riuscito: " + courses.size() + (courses.size() == 1 ? " corso attivo." : " corsi attivi."));
+            for (Classroom.Course c : courses) b.append("\n· ").append(c.name);
+            return b.toString();
+        } catch (SocketTimeoutException e) {
+            return "Tempo scaduto. Se Google ha scritto «Accesso bloccato», la scuola non permette ancora Minerva.";
+        } catch (IOException e) {
+            return "Non riuscito: " + e.getMessage();
+        }
     }
 
     private Settings read() {

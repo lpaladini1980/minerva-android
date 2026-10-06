@@ -46,6 +46,7 @@ public final class TestMain {
         testReadOnly();
         testLogin();
         testCards();
+        testClassroom();
         System.out.println(checks + " checks, " + failures + " failures");
         if (failures > 0) System.exit(1);
     }
@@ -204,5 +205,97 @@ public final class TestMain {
             failed = e.getMessage().startsWith("SSO login failed");
         }
         check(failed, "wrong password fails");
+    }
+
+    /** Sends one raw request line to the loopback listener, as the browser does, and returns the reply. */
+    static String browse(int port, String requestLine) throws IOException {
+        try (java.net.Socket s = new java.net.Socket(java.net.InetAddress.getLoopbackAddress(), port)) {
+            if (requestLine != null) s.getOutputStream().write((requestLine + "\r\nHost: 127.0.0.1\r\n\r\n").getBytes(StandardCharsets.ISO_8859_1));
+            s.shutdownOutput();
+            return new String(s.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
+    static String awaitCode(String... requestLines) throws Exception {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 5, java.net.InetAddress.getLoopbackAddress())) {
+            server.setSoTimeout(5000);
+            List<String> replies = new ArrayList<>();
+            Thread browser = new Thread(() -> {
+                try {
+                    for (String line : requestLines) replies.add(browse(server.getLocalPort(), line));
+                } catch (IOException ignored) {
+                    // the listener stops after the redirect: later lines may find it closed
+                }
+            });
+            browser.start();
+            try {
+                return Classroom.awaitCode(server, "ST8");
+            } finally {
+                browser.join();
+                check(replies.isEmpty() || replies.get(replies.size() - 1).startsWith("HTTP/1.1 200"), "browser gets a page");
+            }
+        }
+    }
+
+    static void testClassroom() throws Exception {
+        equal(new java.util.HashSet<>(Arrays.asList("GET courses")), Classroom.READ_ONLY_CALLS, "classroom allowlist");
+        String url = Classroom.authorizationUrl("http://127.0.0.1:4711", "v".repeat(64), "ST8");
+        String scopes = Argo.queryParam(url, "scope");
+        for (String scope : scopes.split(" ")) check(scope.endsWith(".readonly"), "read-only scope " + scope);
+        equal(Argo.pkceChallenge("v".repeat(64)), Argo.queryParam(url, "code_challenge"), "classroom PKCE");
+        equal("http://127.0.0.1:4711", Argo.queryParam(url, "redirect_uri"), "loopback redirect");
+
+        equal("C0DE", awaitCode(null, "GET /favicon.ico HTTP/1.1", "GET /?state=ST8&code=C0DE&scope=x HTTP/1.1"), "code from the redirect");
+        for (String[] bad : new String[][]{{"GET /?error=access_denied&state=ST8 HTTP/1.1", "access_denied"},
+                {"GET /?state=OTHER&code=C0DE HTTP/1.1", "state mismatch"}}) {
+            String error = "";
+            try {
+                awaitCode(bad[0]);
+            } catch (Classroom.ClassroomException e) {
+                error = e.getMessage();
+            }
+            check(error.endsWith(bad[1]), "sign-in fails on " + bad[1]);
+        }
+
+        List<String> sent = new ArrayList<>();
+        Http.Transport fake = (method, u, headers, body) -> {
+            sent.add(method + " " + u);
+            String json;
+            if (u.equals(Classroom.TOKEN_URL)) {
+                String form = new String(body, StandardCharsets.UTF_8);
+                json = form.contains("code=C0DE") && form.contains("code_verifier=VER") ? "{\"access_token\":\"GAT\",\"refresh_token\":\"GRT\"}" : "{\"error\":\"invalid_grant\"}";
+            } else if (!"Bearer GAT".equals(headers.get("authorization"))) {
+                return new Http.Response(401, new LinkedHashMap<>(), "{\"error\":{\"message\":\"Invalid credentials\"}}".getBytes(StandardCharsets.UTF_8));
+            } else if (u.contains("pageToken=P2")) json = "{\"courses\":[{\"id\":\"3\",\"name\":\"3B Inglese\"}]}";
+            else json = "{\"courses\":[{\"id\":\"1\",\"name\":\"3B Matematica\"},{\"id\":\"2\",\"name\":\"3B Scienze\"}],\"nextPageToken\":\"P2\"}";
+            return new Http.Response(200, new LinkedHashMap<>(), json.getBytes(StandardCharsets.UTF_8));
+        };
+        Classroom classroom = new Classroom(fake);
+        String error = "";
+        try {
+            classroom.courses();
+        } catch (Classroom.ClassroomException e) {
+            error = e.getMessage();
+        }
+        equal("GET courses: HTTP 401 Invalid credentials", error, "Google's reason in the error");
+        classroom.exchangeCode("C0DE", "VER", "http://127.0.0.1:4711");
+        equal("GRT", classroom.refreshToken, "refresh token kept");
+        List<String> names = new ArrayList<>();
+        for (Classroom.Course c : classroom.courses()) names.add(c.name);
+        equal(Arrays.asList("3B Matematica", "3B Scienze", "3B Inglese"), names, "courses, every page");
+        check(sent.get(2).contains("studentId=me") && sent.get(2).contains("courseStates=ACTIVE"), "only the child's active courses");
+
+        sent.clear();
+        for (String[] call : new String[][]{{"POST", "courses"}, {"GET", "courses/1/courseWork"}, {"PATCH", "courses/1/courseWork/2/studentSubmissions/3"},
+                {"POST", "courses/1/courseWork/2/studentSubmissions/3:turnIn"}}) {
+            boolean refused = false;
+            try {
+                classroom.api(call[0], call[1], "");
+            } catch (Classroom.ClassroomException e) {
+                refused = e.getMessage().startsWith("Refused");
+            }
+            check(refused, "classroom refused " + call[0] + " " + call[1]);
+        }
+        check(sent.isEmpty(), "nothing sent to Classroom for refused calls");
     }
 }
