@@ -129,7 +129,10 @@ public final class TestMain {
     }
 
     static void testCards() throws IOException {
-        Map<String, Object> d = Argo.unwrapDashboard(Json.parse(fixture("dashboard.json")));
+        // Same fixture plus a task due today: it must show up in neither "Per domani" nor the following days.
+        String withToday = fixture("dashboard.json").replace("\"dataConsegna\": \"2026-10-07\"}",
+                "\"dataConsegna\": \"2026-10-07\"}, {\"compito\": \"Ripassare le formule\", \"dataConsegna\": \"2026-10-05\"}");
+        Map<String, Object> d = Argo.unwrapDashboard(Json.parse(withToday));
         List<Cards.Card> cards = Cards.build(d, LocalDate.of(2026, 10, 5));  // Monday
         equal(Arrays.asList("Per domani (mar 6/10)", "Verifiche e interrogazioni", "Compiti dei prossimi giorni", "Voti",
                 "Da firmare nell'app DidUp", "Assenze e note"), titles(cards), "card titles");
