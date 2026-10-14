@@ -1,7 +1,7 @@
 # minerva-android: rules for every session
 
 Minerva for Android: the unofficial, **read-only** Argo DidUp Famiglia app (plain Java, no Gradle, no AndroidX).
-Developed by the `minerva-developer` agent, which lives in Paladia (the workspace hub, Paladia#135) with every other
+Developed by the `pl-dev-minerva` agent, which lives in Paladia (the workspace hub, Paladia#135) with every other
 agent and skill; this repository is cloned in `Paladia/repos/minerva-android`. Start Claude Code from Paladia.
 
 - **Read-only, always**: the client allows only `POST login`, `GET profilo` and `POST dashboard/dashboard`
@@ -15,4 +15,4 @@ agent and skill; this repository is cloned in `Paladia/repos/minerva-android`. S
   `develop` (default branch); PR into `develop` with `Fixes #<issue>`, CI green; releases `develop` → `main` with a merge
   commit and a tag `vX.Y.Z` (the tag builds the signed APK), only on the PO's «ok»; only the PO merges into `main`.
 - **Checks**: `bash test.sh` (core tests on a JVM) and a build with `build-apk.ps1` before every PR.
-- Unclear requirement: grill the PO with the `grilling` skill, one question per message, each with a recommended answer.
+- Unclear requirement: grill the PO with the `pl-work-grilling` skill, one question per message, each with a recommended answer.
