@@ -45,6 +45,7 @@ public final class TestMain {
         testHelpers();
         testReadOnly();
         testLogin();
+        testCompletedLogin();
         testCards();
         System.out.println(checks + " checks, " + failures + " failures");
         if (failures > 0) System.exit(1);
@@ -156,6 +157,51 @@ public final class TestMain {
         List<Cards.Card> quiet = Cards.build(new LinkedHashMap<>(), LocalDate.of(2026, 10, 9));  // Friday, empty register
         equal(Arrays.asList("Per lunedì (lun 12/10)"), titles(quiet), "only Tomorrow when empty, Friday looks at Monday");
         equal("Niente da consegnare", quiet.get(0).empty, "empty text");
+    }
+
+    static void testCompletedLogin() throws IOException {
+        String page = "https://www.portaleargo.it/auth/sso/consent/?consent_challenge=TEST";
+        String next = Argo.OAUTH_AUTH_URL + "?consent_verifier=TEST&state=S";
+        String html = "<a href=\"" + next.replace("&", "&amp;") + "\" data-auth-app-redirect>Continue</a>";
+        equal(next, Argo.completedLoginRedirect(page, html), "HTML continuation decodes escaped query parameters");
+        equal(next, Argo.completedLoginRedirect(page, "<a data-auth-app-redirect='' href='" + next + "'>Continue</a>"),
+                "HTML continuation supports attribute order and single quotes");
+        equal(null, Argo.completedLoginRedirect("https://evil.test/auth/sso/consent/", html), "reject untrusted source");
+        for (String target : Arrays.asList("https://evil.test/oauth2/auth", "http://auth.portaleargo.it/oauth2/auth",
+                "https://auth.portaleargo.it/other", "javascript:alert(1)", "https://auth.portaleargo.it@evil.test/oauth2/auth")) {
+            equal(null, Argo.completedLoginRedirect(page, "<a data-auth-app-redirect href='" + target + "'>Continue</a>"),
+                    "reject untrusted continuation");
+        }
+        equal(null, Argo.completedLoginRedirect(page, "<a href='" + next + "'>Continue</a>"), "require continuation marker");
+        equal(null, Argo.completedLoginRedirect(page, "<html>Login failed</html>"), "missing link fails closed");
+
+        List<String> cookies = new ArrayList<>();
+        int[] calls = {0};
+        Http.Transport fake = (method, url, headers, body) -> {
+            int step = calls[0]++;
+            Map<String, List<String>> h = new LinkedHashMap<>();
+            cookies.add(headers.getOrDefault("cookie", "-"));
+            if (step == 0) {
+                h.put("location", List.of("https://www.portaleargo.it/auth/sso/login?login_challenge=CH"));
+                h.put("set-cookie", List.of("a=1; Path=/"));
+            } else if (step == 1) h.put("location", List.of(Argo.OAUTH_AUTH_URL + "?login_verifier=TEST"));
+            else if (step == 2) {
+                h.put("location", List.of(page));
+                h.put("set-cookie", List.of("b=2; HttpOnly"));
+            } else if (step == 3) {
+                equal(page, url, "visit completed-login page");
+                return new Http.Response(200, h, html.getBytes(StandardCharsets.UTF_8));
+            } else if (step == 4) {
+                equal(next, url, "follow HTML continuation");
+                h.put("location", List.of(Argo.REDIRECT_URI + "?code=CODE42"));
+            } else throw new IOException("Unexpected request");
+            return new Http.Response(302, h, new byte[0]);
+        };
+        equal("CODE42", new Argo("SC00001", "parent.example", "fake", fake).authorizationCode("verifier"),
+                "OAuth completes through HTML page");
+        equal(5, calls[0], "no extra OAuth requests");
+        equal("-", cookies.get(3), "no cookies on consent hop, as before");
+        equal("a=1; b=2", cookies.get(4), "preserve cookies on final OAuth hop");
     }
 
     /** The whole login against a fake Argo: OAuth chain, app login, two profiles (one disabled is skipped), dashboard. */
