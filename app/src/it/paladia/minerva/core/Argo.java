@@ -1,6 +1,7 @@
 package it.paladia.minerva.core;
 
 import java.io.IOException;
+import java.net.URI;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -18,6 +19,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Client for the Argo DidUp Famiglia app API (unofficial, reverse-engineered). Mirrors the Python client of the Paladia project:
@@ -207,12 +210,40 @@ public final class Argo {
             if (withCookies[hop - 1]) headers.put("cookie", String.join("; ", cookies));
             Http.Response r = http.request("GET", url, headers, null);
             if (hop == 1) cookies.addAll(cookiePairs(r));
-            url = r.header("location");
+            String next = r.header("location");
+            if (next == null && r.status == 200) next = completedLoginRedirect(url, r.text());
+            url = next;
             if (url == null) throw new ArgoException("OAuth redirect chain broken at hop " + hop + " (HTTP " + r.status + ")");
         }
         String code = queryParam(url, "code");
         if (code == null) throw new ArgoException("OAuth: no code in the final redirect");
         return code;
+    }
+
+    /** Argo's completed-login page now uses an HTML link instead of an HTTP redirect.
+     * Follow only its marked continuation link to the known HTTPS OAuth endpoint; never execute scripts.
+     */
+    static String completedLoginRedirect(String pageUrl, String html) {
+        try {
+            URI page = URI.create(pageUrl);
+            if (!"https".equals(page.getScheme()) || !"www.portaleargo.it".equals(page.getRawAuthority())
+                    || !("/auth/sso/consent/".equals(page.getPath()) || "/auth/sso/consent".equals(page.getPath()))) return null;
+            Matcher anchors = Pattern.compile("<a\\b[^>]*>", Pattern.CASE_INSENSITIVE).matcher(html);
+            Pattern marker = Pattern.compile("\\sdata-auth-app-redirect(?=\\s|=|/?>)", Pattern.CASE_INSENSITIVE);
+            Pattern href = Pattern.compile("\\shref\\s*=\\s*(['\"])(.*?)\\1", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+            while (anchors.find()) {
+                String anchor = anchors.group();
+                if (!marker.matcher(anchor).find()) continue;
+                Matcher link = href.matcher(anchor);
+                if (!link.find()) continue;
+                URI target = page.resolve(link.group(2).replace("&amp;", "&").replace("&#38;", "&").replace("&#x26;", "&"));
+                if ("https".equals(target.getScheme()) && "auth.portaleargo.it".equals(target.getRawAuthority())
+                        && "/oauth2/auth".equals(target.getPath())) return target.toString();
+            }
+        } catch (IllegalArgumentException ignored) {
+            // Invalid HTML links fail through the usual OAuth error, without leaking tokens in URLs.
+        }
+        return null;
     }
 
     void exchangeCode(String code, String verifier) throws IOException {
