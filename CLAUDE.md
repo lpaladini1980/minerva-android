@@ -13,6 +13,6 @@ agent and skill; this repository is cloned in `Paladia/repos/minerva-android`. S
   `MINERVA_KEYSTORE_PASSWORD`. Never print them.
 - **Work (gitflow)**: one issue per piece of work in this repository; branch `feat|fix|docs|chore/<issue>-<slug>` from
   `develop` (default branch); PR into `develop` with `Fixes #<issue>`, CI green; releases `develop` → `main` with a merge
-  commit and a tag `vX.Y.Z` (the tag builds the signed APK), only on the PO's «ok»; only the PO merges into `main`.
+  commit and a tag `vX.Y.Z` (the tag builds the signed APK), only on the PO's «ok»; Claude opens and merges the release PR (lpaladini1980/paladia#482).
 - **Checks**: `bash test.sh` (core tests on a JVM) and a build with `build-apk.ps1` before every PR.
 - Unclear requirement: grill the PO with the `pl-work-grilling` skill, one question per message, each with a recommended answer.
