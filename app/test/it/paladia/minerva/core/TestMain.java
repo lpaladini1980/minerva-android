@@ -45,6 +45,7 @@ public final class TestMain {
         testHelpers();
         testReadOnly();
         testLogin();
+        testCompletedLogin();
         testCards();
         System.out.println(checks + " checks, " + failures + " failures");
         if (failures > 0) System.exit(1);
@@ -158,16 +159,66 @@ public final class TestMain {
         equal("Niente da consegnare", quiet.get(0).empty, "empty text");
     }
 
+    static void testCompletedLogin() throws IOException {
+        String page = "https://www.portaleargo.it/auth/sso/consent/?consent_challenge=TEST";
+        String next = Argo.OAUTH_AUTH_URL + "?consent_verifier=TEST&state=S";
+        String html = "<a href=\"" + next.replace("&", "&amp;") + "\" data-auth-app-redirect>Continue</a>";
+        equal(next, Argo.completedLoginRedirect(page, html), "HTML continuation decodes escaped query parameters");
+        equal(next, Argo.completedLoginRedirect(page, "<a data-auth-app-redirect='' href='" + next + "'>Continue</a>"),
+                "HTML continuation supports attribute order and single quotes");
+        equal(null, Argo.completedLoginRedirect("https://evil.test/auth/sso/consent/", html), "reject untrusted source");
+        for (String target : Arrays.asList("https://evil.test/oauth2/auth", "http://auth.portaleargo.it/oauth2/auth",
+                "https://auth.portaleargo.it/other", "javascript:alert(1)", "https://auth.portaleargo.it@evil.test/oauth2/auth")) {
+            equal(null, Argo.completedLoginRedirect(page, "<a data-auth-app-redirect href='" + target + "'>Continue</a>"),
+                    "reject untrusted continuation");
+        }
+        equal(null, Argo.completedLoginRedirect(page, "<a href='" + next + "'>Continue</a>"), "require continuation marker");
+        equal(null, Argo.completedLoginRedirect(page, "<html>Login failed</html>"), "missing link fails closed");
+
+        List<String> cookies = new ArrayList<>();
+        int[] calls = {0};
+        Http.Transport fake = (method, url, headers, body) -> {
+            int step = calls[0]++;
+            Map<String, List<String>> h = new LinkedHashMap<>();
+            cookies.add(headers.getOrDefault("cookie", "-"));
+            if (step == 0) {
+                h.put("location", List.of("https://www.portaleargo.it/auth/sso/login?login_challenge=CH"));
+                h.put("set-cookie", List.of("a=1; Path=/"));
+            } else if (step == 1) h.put("location", List.of(Argo.OAUTH_AUTH_URL + "?login_verifier=TEST"));
+            else if (step == 2) {
+                h.put("location", List.of(page));
+                h.put("set-cookie", List.of("b=2; HttpOnly"));
+            } else if (step == 3) {
+                equal(page, url, "visit completed-login page");
+                return new Http.Response(200, h, html.getBytes(StandardCharsets.UTF_8));
+            } else if (step == 4) {
+                equal(next, url, "follow HTML continuation");
+                h.put("location", List.of(Argo.REDIRECT_URI + "?code=CODE42"));
+            } else throw new IOException("Unexpected request");
+            return new Http.Response(302, h, new byte[0]);
+        };
+        equal("CODE42", new Argo("SC00001", "parent.example", "fake", fake).authorizationCode("verifier"),
+                "OAuth completes through HTML page");
+        equal(5, calls[0], "no extra OAuth requests");
+        equal("-", cookies.get(3), "no cookies on consent hop, as before");
+        equal("a=1; b=2", cookies.get(4), "preserve cookies on final OAuth hop");
+    }
+
     /** The whole login against a fake Argo: OAuth chain, app login, two profiles (one disabled is skipped), dashboard. */
     static void testLogin() throws IOException {
         List<String[]> calls = new ArrayList<>();
+        Map<String, Map<String, String>> apiHeaders = new LinkedHashMap<>();
+        Map<String, String> apiBodies = new LinkedHashMap<>();
         Http.Transport fake = (method, url, headers, body) -> {
+            if (url.startsWith(Argo.API_BASE)) {
+                apiHeaders.put(method + " " + url.substring(Argo.API_BASE.length()), headers);
+                apiBodies.put(method + " " + url.substring(Argo.API_BASE.length()), body == null ? null : new String(body, StandardCharsets.UTF_8));
+            }
             calls.add(new String[]{method, url, headers == null ? "" : headers.getOrDefault("cookie", "-"),
                     headers == null ? "" : headers.getOrDefault("x-auth-token", "")});
             Map<String, List<String>> h = new LinkedHashMap<>();
             String json = null;
-            if (url.startsWith("https://itunes.apple.com/")) json = "{\"results\":[{\"version\":\"9.9.9\"}]}";
-            else if (url.startsWith(Argo.OAUTH_AUTH_URL)) {
+            if (url.startsWith(Argo.OAUTH_AUTH_URL)) {
                 h.put("location", List.of("https://www.portaleargo.it/auth/sso/login?login_challenge=CH1"));
                 h.put("set-cookie", List.of("a=1; Path=/"));
             } else if (url.equals(Argo.SSO_LOGIN_URL)) {
@@ -190,7 +241,17 @@ public final class TestMain {
         equal(2, profiles.size(), "enabled profiles");
         equal("ALICE", profiles.get(0).firstName, "first student");
         equal("ROSSI BIANCA MARIA", profiles.get(1).fullName, "second student");
-        equal("9.9.9", argo.version, "app version");
+        for (String[] c : calls) check(!c[1].contains("appfamiglia") && !c[1].contains("itunes.apple.com"), "no legacy or third-party call: " + c[1]);
+        equal("https://didattica.portaleargo.it/famiglia/api/", Argo.API_BASE, "Famiglia API host");
+        equal("{}", apiBodies.get("POST login"), "login body is empty");
+        Map<String, String> loginHeaders = apiHeaders.get("POST login");
+        equal("Bearer AT", loginHeaders.get("authorization"), "bearer token");
+        equal("WEB", loginHeaders.get("os-type"), "os-type header");
+        equal(Argo.API_VERSION, loginHeaders.get("argo-client-version"), "client version header");
+        equal("application/json", loginHeaders.get("content-type"), "content type with a body");
+        check(!loginHeaders.containsKey("x-auth-token"), "no profile token on login");
+        check(!apiHeaders.get("GET profilo").containsKey("content-type"), "no content type without a body");
+        equal("SC00001", apiHeaders.get("GET profilo").get("x-cod-min"), "profile school code");
         Map<String, String> cookies = new LinkedHashMap<>();
         for (String[] c : calls) if (c[1].contains("/hop")) cookies.put(c[1].substring(c[1].lastIndexOf('/') + 1), c[2]);
         equal("a=1", cookies.get("hop1"), "cookies on hop 1");
@@ -199,6 +260,9 @@ public final class TestMain {
         Map<String, Object> d = argo.dashboard(profiles.get(1));
         equal(7.25, d.get("mediaGenerale"), "dashboard unwrapped");
         equal("token-bianca", calls.get(calls.size() - 1)[3], "dashboard uses the profile token");
+        Map<String, Object> dashboardBody = Json.obj(Json.parse(apiBodies.get("POST dashboard/dashboard")));
+        equal("2026-09-01 00:00:00.000", Json.str(dashboardBody, "dataultimoaggiornamento"), "dashboard since the school year start");
+        equal("{\"votiGiornalieri\":true}", Json.str(dashboardBody, "opzioni"), "dashboard options of the profile");
 
         boolean failed = false;
         try {

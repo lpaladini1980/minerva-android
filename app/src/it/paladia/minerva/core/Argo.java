@@ -1,42 +1,42 @@
 package it.paladia.minerva.core;
 
 import java.io.IOException;
+import java.net.URI;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.Date;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
- * Client for the Argo DidUp Famiglia app API (unofficial, reverse-engineered). Mirrors the Python client of the Paladia project:
- * OAuth2 + PKCE following the SSO redirects by hand, app login keeping every student profile, GET profilo for the
- * name, POST dashboard/dashboard per profile.
+ * Client for the Argo DidUp Famiglia API (unofficial, reverse-engineered): OAuth2 + PKCE following the SSO redirects
+ * by hand, then on didattica.portaleargo.it the app login keeping every student profile, GET profilo for the name and
+ * the start of the school year, POST dashboard/dashboard per profile.
  *
  * READ-ONLY BY CONSTRUCTION (never write anything on Argo): api() refuses anything outside
  * READ_ONLY_CALLS before a byte is sent. Never widen it without the PO's explicit ok.
  */
 public final class Argo {
-    public static final String API_BASE = "https://www.portaleargo.it/appfamiglia/api/rest/";
+    public static final String API_BASE = "https://didattica.portaleargo.it/famiglia/api/";
     public static final String OAUTH_AUTH_URL = "https://auth.portaleargo.it/oauth2/auth";
     public static final String OAUTH_TOKEN_URL = "https://auth.portaleargo.it/oauth2/token";
     public static final String SSO_LOGIN_URL = "https://www.portaleargo.it/auth/sso/login";
     static final String CLIENT_ID = "72fd6dea-d0ab-4bb9-8eaa-3ac24c84886c";
     static final String REDIRECT_URI = "it.argosoft.didup.famiglia.new://login-callback";
     static final String SCOPES = "openid offline profile user.roles argo";
-    static final String APP_LOOKUP_URL = "https://itunes.apple.com/lookup?bundleId=it.argosoft.didup.famiglia.new";
-    static final String DEFAULT_VERSION = "1.29.2";
+    static final String API_VERSION = "4.1.0";
     static final String FIRST_UPDATE = "2000-01-01 00:00:00.000";
     public static final Set<String> READ_ONLY_CALLS = new HashSet<>(Arrays.asList("POST login", "GET profilo", "POST dashboard/dashboard"));
 
@@ -57,6 +57,7 @@ public final class Argo {
         public String firstName = "";
         public String lastName = "";
         public String fullName = "";
+        public String since = FIRST_UPDATE;
 
         Profile(String token, String codMin, Map<String, Object> options) {
             this.token = token;
@@ -81,9 +82,7 @@ public final class Argo {
     private final String username;
     private final String password;
     private final Http.Transport http;
-    String version;
     String accessToken;
-    long expiresAt;  // epoch millis, 0 = unknown
 
     public Argo(String school, String username, String password, Http.Transport http) {
         this.school = school;
@@ -151,31 +150,15 @@ public final class Argo {
         return b.toString();
     }
 
-    static String formatDate(long millis) {
-        return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.ROOT).format(new Date(millis));
-    }
-
     // --- OAuth ------------------------------------------------------------------------------------------------------
 
     public List<Profile> login() throws IOException {
-        if (version == null) version = appVersion();
         String verifier = randomString(43);
         String code = authorizationCode(verifier);
         exchangeCode(code, verifier);
         List<Profile> profiles = appLogin();
         for (Profile p : profiles) loadStudent(p);
         return profiles;
-    }
-
-    String appVersion() {
-        try {
-            Map<String, Object> data = Json.obj(Json.parse(http.request("GET", APP_LOOKUP_URL, null, null).text()));
-            List<Object> results = Json.list(data, "results");
-            String v = results.isEmpty() ? "" : Json.str(Json.obj(results.get(0)), "version");
-            return v.isEmpty() ? DEFAULT_VERSION : v;
-        } catch (IOException | RuntimeException e) {
-            return DEFAULT_VERSION;
-        }
     }
 
     String authorizationUrl(String verifier) {
@@ -207,12 +190,40 @@ public final class Argo {
             if (withCookies[hop - 1]) headers.put("cookie", String.join("; ", cookies));
             Http.Response r = http.request("GET", url, headers, null);
             if (hop == 1) cookies.addAll(cookiePairs(r));
-            url = r.header("location");
+            String next = r.header("location");
+            if (next == null && r.status == 200) next = completedLoginRedirect(url, r.text());
+            url = next;
             if (url == null) throw new ArgoException("OAuth redirect chain broken at hop " + hop + " (HTTP " + r.status + ")");
         }
         String code = queryParam(url, "code");
         if (code == null) throw new ArgoException("OAuth: no code in the final redirect");
         return code;
+    }
+
+    /** Argo's completed-login page now uses an HTML link instead of an HTTP redirect.
+     * Follow only its marked continuation link to the known HTTPS OAuth endpoint; never execute scripts.
+     */
+    static String completedLoginRedirect(String pageUrl, String html) {
+        try {
+            URI page = URI.create(pageUrl);
+            if (!"https".equals(page.getScheme()) || !"www.portaleargo.it".equals(page.getRawAuthority())
+                    || !("/auth/sso/consent/".equals(page.getPath()) || "/auth/sso/consent".equals(page.getPath()))) return null;
+            Matcher anchors = Pattern.compile("<a\\b[^>]*>", Pattern.CASE_INSENSITIVE).matcher(html);
+            Pattern marker = Pattern.compile("\\sdata-auth-app-redirect(?=\\s|=|/?>)", Pattern.CASE_INSENSITIVE);
+            Pattern href = Pattern.compile("\\shref\\s*=\\s*(['\"])(.*?)\\1", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+            while (anchors.find()) {
+                String anchor = anchors.group();
+                if (!marker.matcher(anchor).find()) continue;
+                Matcher link = href.matcher(anchor);
+                if (!link.find()) continue;
+                URI target = page.resolve(link.group(2).replace("&amp;", "&").replace("&#38;", "&").replace("&#x26;", "&"));
+                if ("https".equals(target.getScheme()) && "auth.portaleargo.it".equals(target.getRawAuthority())
+                        && "/oauth2/auth".equals(target.getPath())) return target.toString();
+            }
+        } catch (IllegalArgumentException ignored) {
+            // Invalid HTML links fail through the usual OAuth error, without leaking tokens in URLs.
+        }
+        return null;
     }
 
     void exchangeCode(String code, String verifier) throws IOException {
@@ -225,8 +236,6 @@ public final class Argo {
             throw new ArgoException("OAuth token: " + (data.containsKey("error") ? data.get("error") : "no access_token"));
         }
         accessToken = Json.str(data, "access_token");
-        Object expiresIn = data.get("expires_in");
-        expiresAt = expiresIn instanceof Double ? System.currentTimeMillis() + (long) ((Double) expiresIn * 1000) : 0;
     }
 
     // --- app API ----------------------------------------------------------------------------------------------------
@@ -234,10 +243,9 @@ public final class Argo {
     Map<String, String> headers(Profile profile) {
         Map<String, String> h = new LinkedHashMap<>();
         h.put("accept", "application/json");
-        h.put("argo-client-version", version == null ? DEFAULT_VERSION : version);
-        h.put("content-type", "application/json; charset=utf-8");
+        h.put("argo-client-version", API_VERSION);
+        h.put("os-type", "WEB");
         h.put("authorization", "Bearer " + accessToken);
-        if (expiresAt > 0) h.put("x-date-exp-auth", formatDate(expiresAt));
         if (profile != null) {
             h.put("x-auth-token", profile.token);
             h.put("x-cod-min", profile.codMin);
@@ -248,7 +256,9 @@ public final class Argo {
     public Object api(String method, String path, Profile profile, String jsonBody) throws IOException {
         if (!READ_ONLY_CALLS.contains(method + " " + path)) throw new ArgoException("Refused " + method + " " + path + ": Minerva is read-only on Argo");
         byte[] body = jsonBody == null ? null : jsonBody.getBytes(StandardCharsets.UTF_8);
-        Http.Response r = http.request(method, API_BASE + path, headers(profile), body);
+        Map<String, String> headers = headers(profile);
+        if (body != null) headers.put("content-type", "application/json");
+        Http.Response r = http.request(method, API_BASE + path, headers, body);
         if (r.status >= 400) throw new ArgoException(method + " " + path + ": HTTP " + r.status);
         Object data = r.body.length == 0 ? null : Json.parse(r.text());
         if (data instanceof Map && Boolean.FALSE.equals(Json.obj(data).get("success"))) {
@@ -259,8 +269,7 @@ public final class Argo {
     }
 
     List<Profile> appLogin() throws IOException {
-        String body = "{\"lista-opzioni-notifiche\":\"{}\",\"lista-x-auth-token\":\"[]\",\"clientID\":" + Json.quote(randomString(163)) + "}";
-        List<Object> entries = Json.list(Json.obj(api("POST", "login", null, body)), "data");
+        List<Object> entries = Json.list(Json.obj(api("POST", "login", null, "{}")), "data");
         if (entries.isEmpty()) throw new ArgoException("App login: no profile returned");
         List<Profile> profiles = new ArrayList<>();
         for (Object e : entries) {
@@ -277,7 +286,10 @@ public final class Argo {
     }
 
     void loadStudent(Profile p) throws IOException {
-        Map<String, Object> student = Json.obj(Json.obj(Json.obj(api("GET", "profilo", p, null)), "data"), "alunno");
+        Map<String, Object> data = Json.obj(Json.obj(api("GET", "profilo", p, null)), "data");
+        String yearStart = Json.str(Json.obj(data, "anno"), "dataInizio");
+        if (yearStart.length() >= 10) p.since = yearStart.substring(0, 10) + " 00:00:00.000";
+        Map<String, Object> student = Json.obj(data, "alunno");
         p.firstName = Json.str(student, "nome");
         p.lastName = Json.str(student, "cognome");
         String full = Json.str(student, "nominativo");
@@ -291,7 +303,7 @@ public final class Argo {
             options.append(Json.quote(o.getKey())).append(':').append(o.getValue() == null ? "null" : o.getValue().toString());
         }
         options.append('}');
-        String body = "{\"dataultimoaggiornamento\":" + Json.quote(FIRST_UPDATE) + ",\"opzioni\":" + Json.quote(options.toString()) + "}";
+        String body = "{\"dataultimoaggiornamento\":" + Json.quote(p.since) + ",\"opzioni\":" + Json.quote(options.toString()) + "}";
         return unwrapDashboard(api("POST", "dashboard/dashboard", p, body));
     }
 

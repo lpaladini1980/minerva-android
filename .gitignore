@@ -1,3 +1,6 @@
 app/build/
 *.keystore
 *.jks
+
+# Intermediate work of agents and skills (Paladia#152)
+tmp/

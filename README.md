@@ -10,7 +10,7 @@ An unofficial, **read-only** Android app for **Argo DidUp Famiglia**, the Italia
 
 ## Build and test
 
-Plain Java, no Gradle, no AndroidX (Android SDK and Android Studio's JDK on Windows):
+Plain Java, no Gradle, no AndroidX. Windows uses PowerShell; Linux uses Bash 4.4+. Both builds require JDK 17+ and the Android SDK (platform 36 and build-tools 36.0.0).
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File build-apk.ps1 -Project app -Name Minerva           # app/build/Minerva.apk
@@ -18,7 +18,21 @@ powershell -ExecutionPolicy Bypass -File build-apk.ps1 -Project app -Name Minerv
 bash test.sh                                                                                # core tests on a JVM
 ```
 
-**Release builds** (`-Release`) are signed with the release key. The keystore lives outside every repository and is backed up separately; its path and password come from the environment (`MINERVA_KEYSTORE`, `MINERVA_KEYSTORE_PASSWORD`). Losing the keystore means installed apps can no longer be updated. Release certificate SHA-256: `1D:68:CB:99:75:9B:67:E7:84:B1:15:69:E4:40:B0:56:D2:F7:AB:57:79:6B:A7:86:49:44:58:22:F3:8A:6E:D0`.
+On Linux, install `zip`, set `ANDROID_HOME` to your Android SDK directory (or use `ANDROID_SDK_ROOT`), and run:
+
+```bash
+export ANDROID_HOME="$HOME/Android/Sdk"  # adjust to your SDK location
+# Install the required SDK components with the official Android command-line tools.
+"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+bash test.sh
+bash build-apk.sh --project app --name Minerva            # app/build/Minerva.apk
+bash build-apk.sh --project app --name Minerva --install  # also install over adb
+bash build-apk.sh --project app --name Minerva --release  # use the release key
+```
+
+`JAVA_HOME` is optional when `java`, `javac` and `keytool` are already on `PATH`. The Bash script checks the APK signature and ZIP alignment after building. Debug builds use `~/.android/debug.keystore` (override with `MINERVA_DEBUG_KEYSTORE`); they cannot update an app installed with the release key. Optional `ANDROID_PLATFORM` and `ANDROID_BUILD_TOOLS` variables select alternative installed SDK versions; the target SDK remains 36. Run `bash build-apk.sh --help` for all options.
+
+**Release builds** (`-Release` in PowerShell, `--release` in Bash) are signed with the release key. The keystore lives outside every repository and is backed up separately; its path and password come from the environment (`MINERVA_KEYSTORE`, `MINERVA_KEYSTORE_PASSWORD`). Losing the keystore means installed apps can no longer be updated. Release certificate SHA-256: `1D:68:CB:99:75:9B:67:E7:84:B1:15:69:E4:40:B0:56:D2:F7:AB:57:79:6B:A7:86:49:44:58:22:F3:8A:6E:D0`.
 
 **Automatic releases**: pushing a tag `vX.Y.Z` runs `.github/workflows/release.yml`, which tests, builds the APK signed with the release key (secrets `MINERVA_KEYSTORE_B64` and `MINERVA_KEYSTORE_PASSWORD`) and attaches it to the GitHub release. Bump `versionCode` and `versionName` in `app/AndroidManifest.xml` first.
 

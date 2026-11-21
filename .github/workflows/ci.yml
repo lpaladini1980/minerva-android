@@ -1,5 +1,5 @@
 name: CI
-# Core tests on a plain JVM against the shared fixtures. Runs on pull requests only (private repo: Actions minutes).
+# Core tests on a plain JVM against the shared fixtures. Runs on pull requests only (public repo, PO 2026-10-28: Actions minutes are free, the rule keeps CI quiet).
 on:
   pull_request:
 concurrency:
